@@ -1,6 +1,10 @@
-# Plotly Flask Web Application
+# SPY Price and RSI Chart Application
 
-This is a Flask web application that displays an interactive Plotly graph.
+This application displays:
+- Real-time SPY price data
+- Calculated Relative Strength Index (RSI)
+- Dual chart visualization with synchronized time axis
+- Overbought/oversold indicators
 
 ## Features
 - Displays real-time SPY options data from Firebase
@@ -53,10 +57,24 @@ http://localhost:51153
 ## Development
 
 ### Testing
+
+The test suite includes comprehensive tests for:
+- RSI calculation
+  - Verifies RSI values are within 0-100 range
+  - Tests flat, increasing, and decreasing price scenarios
+  - Validates RSI response to upward/downward momentum
+- Data processing
+- Chart generation
+
 Run the test suite:
 ```bash
 python3 -m pytest tests/
 ```
+
+Test coverage includes:
+- `tests/test_rsi.py`: Tests for RSI calculation
+- `tests/test_data_processing.py`: Tests for data handling
+- `tests/test_chart_generation.py`: Tests for visualization
 
 ### Code Structure
 - `app.py`: Main application file
