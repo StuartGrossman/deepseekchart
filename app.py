@@ -1,9 +1,53 @@
 from flask import Flask, render_template_string
 import plotly.graph_objs as go
 import plotly
+from plotly.subplots import make_subplots
 import firebase_admin
 from firebase_admin import credentials, db
 from firebase.config import FIREBASE_CONFIG
+import numpy as np
+
+def calculate_rsi(prices, period=14):
+    """Calculate Relative Strength Index (RSI)"""
+    deltas = np.diff(prices)
+    seed = deltas[:period + 1]
+    up = seed[seed >= 0].sum() / period
+    down = -seed[seed < 0].sum() / period
+    
+    # Handle flat prices (no change)
+    if down == 0:
+        # If all prices are increasing, RSI should be 100
+        if np.all(deltas > 0):
+            return np.full_like(prices, 100)
+        # If all prices are flat, RSI should be 50
+        if np.all(deltas == 0):
+            return np.full_like(prices, 50)
+        # If some prices are flat but not all, use default calculation
+        
+    rs = up / down
+    rsi = np.zeros_like(prices)
+    rsi[:period] = 100. - 100. / (1. + rs)
+
+    for i in range(period, len(prices)):
+        delta = deltas[i - 1]
+        if delta > 0:
+            upval = delta
+            downval = 0.
+        else:
+            upval = 0.
+            downval = -delta
+
+        up = (up * (period - 1) + upval) / period
+        down = (down * (period - 1) + downval) / period
+        
+        # Prevent division by zero
+        if down == 0:
+            rsi[i] = 100
+        else:
+            rs = up / down
+            rsi[i] = 100. - 100. / (1. + rs)
+
+    return rsi
 
 # Initialize Firebase
 cred = credentials.Certificate('firebase/serviceAccountKey.json')
@@ -43,8 +87,11 @@ def index():
     except (ValueError, TypeError) as e:
         return f"Error processing data: {str(e)}", 500
     
-    # Create chart from Firebase data
-    trace = go.Scatter(
+    # Calculate RSI
+    rsi_values = calculate_rsi(y)
+    
+    # Create price chart
+    price_trace = go.Scatter(
         x=x,
         y=y,
         mode='lines+markers',
@@ -53,14 +100,39 @@ def index():
         marker=dict(size=6, color='darkblue')
     )
     
-    layout = go.Layout(
-        title='SPY Price Over Time',
-        xaxis={'title': 'Time', 'type': 'date'},
-        yaxis={'title': 'Price ($)'},
+    # Create RSI chart
+    rsi_trace = go.Scatter(
+        x=x,
+        y=rsi_values,
+        mode='lines',
+        name='RSI',
+        line=dict(color='purple', width=2)
+    )
+    
+    # Create subplots
+    fig = plotly.subplots.make_subplots(
+        rows=2, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.1,
+        subplot_titles=('SPY Price', 'Relative Strength Index (RSI)')
+    )
+    
+    # Add traces
+    fig.add_trace(price_trace, row=1, col=1)
+    fig.add_trace(rsi_trace, row=2, col=1)
+    
+    # Update layout
+    fig.update_layout(
+        height=800,
+        showlegend=True,
         hovermode='x unified'
     )
     
-    fig = go.Figure(data=[trace], layout=layout)
+    # Update y-axes
+    fig.update_yaxes(title_text='Price ($)', row=1, col=1)
+    fig.update_yaxes(title_text='RSI', row=2, col=1)
+    fig.update_xaxes(title_text='Time', row=2, col=1)
+    
     graph_json = plotly.io.to_json(fig)
     
     return render_template_string('''
