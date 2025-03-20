@@ -57,6 +57,14 @@ firebase_admin.initialize_app(cred, {
 
 app = Flask(__name__)
 
+from data_fetcher.polygon_fetcher import PolygonFetcher
+import threading
+
+# Start real-time data fetching in a separate thread
+fetcher = PolygonFetcher()
+data_thread = threading.Thread(target=fetcher.get_real_time_data, daemon=True)
+data_thread.start()
+
 @app.route('/')
 def index():
     # Fetch data from Firebase
@@ -80,9 +88,10 @@ def index():
                     timestamps.append(entry['timestamp'])
                     prices.append(float(entry['spyPrice']))
             
-            # Sort by timestamp
+            # Sort by timestamp and convert to datetime
+            from datetime import datetime
             sorted_data = sorted(zip(timestamps, prices), key=lambda x: x[0])
-            x = [item[0] for item in sorted_data]  # Timestamps
+            x = [datetime.strptime(item[0], '%Y-%m-%dT%H:%M:%S.%fZ') for item in sorted_data]  # Convert to datetime
             y = [item[1] for item in sorted_data]  # Prices
     except (ValueError, TypeError) as e:
         return f"Error processing data: {str(e)}", 500
@@ -100,13 +109,17 @@ def index():
         marker=dict(size=6, color='darkblue')
     )
     
-    # Create RSI chart
+    # Debug print RSI values
+    print("RSI Values:", rsi_values, flush=True)
+    
+    # Create RSI chart (use same timestamps as price chart)
     rsi_trace = go.Scatter(
-        x=x,
-        y=rsi_values,
-        mode='lines',
+        x=x[len(x)-len(rsi_values):],  # Align timestamps with RSI values
+        y=rsi_values.tolist(),  # Convert numpy array to list
+        mode='lines+markers',
         name='RSI',
-        line=dict(color='purple', width=2)
+        line=dict(color='purple', width=2),
+        marker=dict(size=6, color='magenta')
     )
     
     # Create subplots
@@ -121,12 +134,15 @@ def index():
     fig.add_trace(price_trace, row=1, col=1)
     fig.add_trace(rsi_trace, row=2, col=1)
     
-    # Update layout
+    # Update layout and axes
     fig.update_layout(
         height=800,
         showlegend=True,
         hovermode='x unified'
     )
+    
+    # Set RSI y-axis range
+    fig.update_yaxes(range=[0, 100], row=2, col=1)
     
     # Update y-axes
     fig.update_yaxes(title_text='Price ($)', row=1, col=1)
