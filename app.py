@@ -57,6 +57,14 @@ firebase_admin.initialize_app(cred, {
 
 app = Flask(__name__)
 
+from data_fetcher.polygon_fetcher import PolygonFetcher
+import threading
+
+# Start real-time data fetching in a separate thread
+fetcher = PolygonFetcher()
+data_thread = threading.Thread(target=fetcher.get_real_time_data, daemon=True)
+data_thread.start()
+
 @app.route('/')
 def index():
     # Fetch data from Firebase
